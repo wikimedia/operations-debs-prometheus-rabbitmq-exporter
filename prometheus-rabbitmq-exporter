@@ -1,0 +1,224 @@
+#!/usr/bin/python
+# Copyright 2017 Moritz Muehlenhoff
+#                Filippo Giunchedi
+#                Wikimedia Foundation
+# Copyright 2012 Diamond developers (Brightcove Inc, Ivan Pouzyrevsky,
+#                Rob Smith, Wijnand Modderman-Lenstra, Dennis Kaarsemaker)
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+import argparse
+import logging
+import sys
+import time
+import urllib2
+import json
+import yaml
+
+from urlparse import urljoin
+from urllib import quote
+from base64 import b64encode
+
+from prometheus_client import start_http_server, Summary
+from prometheus_client.core import (CounterMetricFamily, GaugeMetricFamily,
+                                    REGISTRY)
+
+log = logging.getLogger(__name__)
+
+
+class RabbitMQClient(object):
+
+    def __init__(self, host, user, password, timeout=5):
+        self.base_url = 'http://%s/api/' % (host)
+        self.timeout = timeout
+        self._authorization = 'Basic ' + b64encode('%s:%s' % (user, password))
+
+    def do_call(self, path):
+        url = urljoin(self.base_url, path)
+        req = urllib2.Request(url)
+        req.add_header('Authorization', self._authorization)
+        return json.load(urllib2.urlopen(req, timeout=self.timeout))
+
+    def get_queues(self, vhost=None):
+        path = 'queues'
+        if vhost:
+            vhost = quote(vhost, '')
+            path += '/%s' % vhost
+
+        queues = self.do_call(path)
+        return queues or []
+
+    def get_overview(self):
+        return self.do_call('overview')
+
+    def get_node(self, node):
+        return self.do_call('nodes/%s' % node)
+
+
+class PowerRabbitMQCollector(object):
+    scrape_duration = Summary(
+            'rabbitmq_scrape_duration_seconds', 'RabbitMQ exporter scrape duration')
+
+    metrics = {}
+
+    def __init__(self, config):
+        cfg_file = yaml.load(config)
+        self.host = cfg_file['server']
+        self.user = cfg_file['username']
+        self.password = cfg_file['password']
+
+    def prometheus_escape(self, name):
+        return 'rabbitmq_' + name.replace('.', '_').replace('-', '_')
+
+    def publish_metric(self, name, prev_keys, key, data):
+        value = data[key]
+        keys = prev_keys + [key]
+        if isinstance(value, dict):
+            for new_key in value:
+                self.publish_metric(name, keys, new_key, value)
+        elif isinstance(value, (float, int, long)):
+            joined_keys = '_'.join(keys)
+            if name:
+                publish_key = self.prometheus_escape('{0}_{1}'.format(name, joined_keys))
+            else:
+                publish_key = self.prometheus_escape(joined_keys)
+
+            if isinstance(value, bool):
+                value = int(value)
+
+            try:
+                value = float(value)
+            except ValueError:
+                value = float('nan')
+            metric = GaugeMetricFamily(publish_key, '')
+            metric.add_metric([], value)
+            self.metrics[publish_key] = metric
+
+    @scrape_duration.time()
+    def collect(self):
+        health_metrics = [
+            'fd_used',
+            'fd_total',
+            'mem_used',
+            'mem_limit',
+            'sockets_used',
+            'sockets_total',
+            'disk_free_limit',
+            'disk_free',
+            'proc_used',
+            'proc_total',
+        ]
+
+        up = GaugeMetricFamily('rabbitmq_up', 'RabbitMQ is running')
+
+        try:
+            client = RabbitMQClient(self.host, self.user, self.password)
+            vhost_conf = {"*": ""}
+
+            for vhost in vhost_conf:
+                queues = vhost_conf[vhost]
+
+                if queues == "*":
+                    queues = ""
+
+                vhost = None
+
+                for queue in client.get_queues(vhost):
+                    if self.filter_queue(queue['name']):
+                        continue
+
+                    for key in queue:
+                        prefix = "queues"
+                        queue_name = queue['name']
+
+                        name = '{0}_{1}'.format(prefix, queue_name)
+
+                        self.publish_metric(name, [], key, queue)
+
+            overview = client.get_overview()
+            for key in overview:
+                self.publish_metric('', [], key, overview)
+
+            node_name = client.get_overview()['node']
+            node_data = client.get_node(node_name)
+            for metric in health_metrics:
+                health_metric_name = 'rabbitmq_health_' + metric
+                health_metric_value = node_data[metric]
+                try:
+                    value = float(health_metric_value)
+                except ValueError:
+                    value = float('nan')
+                metric = GaugeMetricFamily(health_metric_name, '')
+                metric.add_metric([], value)
+                self.metrics[health_metric_name] = metric
+
+        except Exception, e:
+            print 'An error occurred collecting from RabbitMQ, %s', e
+            up.add_metric([], 0)
+            yield up
+            return
+
+        up.add_metric([], 1)
+        yield up
+
+        for metric in self.metrics.values():
+            yield metric
+
+    # Some queue names are really noisy and seem to be temporal
+    # in nature, skip those
+    def filter_queue(self, queue_name):
+        filtered_queues = ['_fanout_', 'reply_']
+        for skip_queue in filtered_queues:
+            if skip_queue in queue_name:
+                return True
+        return False
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--listen', metavar='ADDRESS',
+                        help='Listen on this address', default=':9195')
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help='Enable debug logging')
+    parser.add_argument('-c', '--config', type=argparse.FileType('r'),
+                        help='Configuration file', required=True)
+
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING)
+
+    address, port = args.listen.split(':', 1)
+
+    log.info('Starting rabbitmq_exporter on %s:%s', address, port)
+
+    REGISTRY.register(PowerRabbitMQCollector(args.config))
+    start_http_server(int(port), addr=address)
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
