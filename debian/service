@@ -1,0 +1,11 @@
+[Unit]
+Description=Prometheus RabbitMQ exporter
+
+[Service]
+Restart=always
+User=prometheus
+ExecStart=/usr/bin/prometheus-ircd-exporter $ARGS
+EnvironmentFile=-/etc/default/prometheus-rabbitmq-exporter
+
+[Install]
+WantedBy=multi-user.target

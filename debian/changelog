@@ -1,0 +1,5 @@
+prometheus-rabbitmq-exporter (0.1) trusty-wikimedia; urgency=medium
+
+  * Initial release
+
+ -- Moritz Muehlenhoff <moritz@wikimedia.org>  Wed, 13 Dec 2017 12:02:27 +0000
