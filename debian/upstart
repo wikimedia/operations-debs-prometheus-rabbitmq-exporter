@@ -7,6 +7,6 @@ start on (local-filesystem and net-device-up IFACE!=lo)
 setuid prometheus
 
 script
-    exec /usr/bin/prometheus-rabbitmq-exporter
+    exec /usr/bin/prometheus-rabbitmq-exporter -c /etc/prometheus/rabbitmq-exporter.yaml
 end script
         

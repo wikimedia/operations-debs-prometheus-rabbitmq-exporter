@@ -1,3 +1,9 @@
+prometheus-rabbitmq-exporter (0.2) trusty-wikimedia; urgency=medium
+
+  * Add config file to systemd unit / upstart job
+
+ -- Moritz Muehlenhoff <mmuhlenhoff@wikimedia.org>  Fri, 15 Dec 2017 16:33:24 +0100
+
 prometheus-rabbitmq-exporter (0.1) trusty-wikimedia; urgency=medium
 
   * Initial release
