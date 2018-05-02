@@ -1,3 +1,9 @@
+prometheus-rabbitmq-exporter (0.2+jessie-wikimedia) jessie-wikimedia; urgency=medium
+
+  * Rebuild for jessie-wikimedia
+
+ -- Arturo Borrero Gonzalez <aborrero@wikimedia.org>  Wed, 02 May 2018 18:04:01 +0200
+
 prometheus-rabbitmq-exporter (0.2) trusty-wikimedia; urgency=medium
 
   * Add config file to systemd unit / upstart job
