@@ -1,3 +1,10 @@
+prometheus-rabbitmq-exporter (0.3) jessie-wikimedia; urgency=medium
+
+  * [91eb17f] d/service: fix ExecStart call
+  * [45ef9a5] d/: drop upstart file
+
+ -- Arturo Borrero Gonzalez <aborrero@wikimedia.org>  Fri, 04 May 2018 12:43:49 +0200
+
 prometheus-rabbitmq-exporter (0.2+jessie-wikimedia) jessie-wikimedia; urgency=medium
 
   * Rebuild for jessie-wikimedia
