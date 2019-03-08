@@ -1,4 +1,4 @@
-prometheus-rabbitmq-exporter (0.4) UNRELEASED; urgency=medium
+prometheus-rabbitmq-exporter (0.4) unstable; urgency=medium
 
   * [85b76a8] postinst: explicitly mention home directory
   * [fcdbf35] d/control: include python dep
