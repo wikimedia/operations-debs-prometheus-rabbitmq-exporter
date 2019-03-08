@@ -7,6 +7,6 @@ Standards-Version: 3.9.8
 
 Package: prometheus-rabbitmq-exporter
 Architecture: all
-Depends: python-prometheus-client, ${misc:Depends}
+Depends: python-prometheus-client, ${misc:Depends}, python
 Description: Prometheus exporter for RabbitMQ
  Prometheus exporter for RabbitMQ broker.
