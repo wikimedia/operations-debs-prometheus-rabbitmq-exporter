@@ -1,3 +1,11 @@
+prometheus-rabbitmq-exporter (0.4) UNRELEASED; urgency=medium
+
+  * [85b76a8] postinst: explicitly mention home directory
+  * [fcdbf35] d/control: include python dep
+  * [17a74ab] d/rules: avoid running dh_installinit
+
+ -- Arturo Borrero Gonzalez <aborrero@wikimedia.org>  Fri, 08 Mar 2019 15:26:21 +0100
+
 prometheus-rabbitmq-exporter (0.3) jessie-wikimedia; urgency=medium
 
   * [91eb17f] d/service: fix ExecStart call
