@@ -2,3 +2,9 @@
 
 %:
 	dh $@ --with systemd
+
+override_dh_installinit:
+	# do nothing
+	# so we avoid noise from lintian:
+	#  init.d-script-not-included-in-package
+	#  init.d-script-not-marked-as-conffile
