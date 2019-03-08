@@ -6,7 +6,7 @@ case "$1" in
   configure)
     # Add prometheus user
     if ! getent passwd prometheus > /dev/null; then
-        adduser --quiet --system --no-create-home \
+        adduser --quiet --system --no-create-home  --home /nonexistent \
             --group --gecos "Prometheus daemon" prometheus || true
     fi
 
